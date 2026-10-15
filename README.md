@@ -7,7 +7,7 @@
 ## ファイル構成と実行場所
 
 ```text
-visualize_vtk_by_pvpython/
+visualize-vtk-by-pvpython/
 ├── README.md
 ├── main.py
 ├── config.json
@@ -23,10 +23,10 @@ visualize_vtk_by_pvpython/
 - [sample/inputs](./sample/inputs)：付属の入力データ。
 - [sample/images](./sample/images)：付属設定による出力先。既存の同名PNGは上書きされます。
 
-以降のコマンド例は、すべてこのREADMEが置かれた `visualize_vtk_by_pvpython` ディレクトリをカレントディレクトリとして実行します。親ディレクトリから始める場合は、最初に移動してください。
+以降のコマンド例は、すべてこのREADMEが置かれた `visualize-vtk-by-pvpython` ディレクトリをカレントディレクトリとして実行します。親ディレクトリから始める場合は、最初に移動してください。
 
 ```bash
-cd visualize_vtk_by_pvpython
+cd visualize-vtk-by-pvpython
 ```
 
 ## 1. condaによる環境構築
