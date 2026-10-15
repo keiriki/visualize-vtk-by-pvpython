@@ -521,9 +521,9 @@ vtkXOpenGLRenderWindow ... WARN| bad X server connection. DISPLAY=
 現在の [go.sh](./go.sh) の実行部分は次の形式です。
 
 ```sh
-/home/yamanaka/.pyenv/versions/anaconda3-2024.10-1/bin/conda run \
+~/.pyenv/versions/anaconda3-2024.10-1/bin/conda run \
   --no-capture-output \
-  -p /home/yamanaka/.pyenv/versions/anaconda3-2024.10-1/envs/paraview \
+  -p ~/.pyenv/versions/anaconda3-2024.10-1/envs/paraview \
   pvpython \
   --force-offscreen-rendering \
   --opengl-window-backend EGL \
