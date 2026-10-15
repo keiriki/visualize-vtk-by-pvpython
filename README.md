@@ -482,14 +482,91 @@ xvfb-run -a pvpython main.py --config config.json
 
 `xvfb-run` はParaViewとは別のツールで、condaのParaView導入だけで利用可能になるとは限りません。未導入の場合は管理者に相談してください。適切な方法はサーバーのGPU・ドライバー・ParaViewビルドによって異なります。condaでインストールできたことだけでは、ヘッドレス描画の成功は保証されません。
 
-## 10. よくあるエラー
+## 10. qsubでの実行とXサーバー接続警告
+
+### 10.1 ジョブ内のconda環境を明示する
+
+qsubのジョブでは、対話シェルで有効化したconda環境がそのまま利用できるとは限りません。次のメッセージは、ParaViewが未導入という意味ではなく、ジョブ内でpyenvが適切な環境を選択できていない場合にも発生します。
+
+```text
+pyenv: pvpython: command not found
+
+The `pvpython' command exists in these Python versions:
+  anaconda3-2024.10-1/envs/paraview
+```
+
+対策として、[go.sh](./go.sh) ではcondaの絶対パスと環境のパスを指定して実行します。可視化の設定は引き続き [config.json](./config.json) で管理します。
+
+### 10.2 DISPLAYが空のときの警告
+
+計算ノードでXディスプレイが利用できない場合、次のような警告が出ることがあります。
+
+```text
+vtkXOpenGLRenderWindow ... WARN| bad X server connection. DISPLAY=
+```
+
+これはXサーバーへの接続に失敗したという**警告**であり、この1行だけではジョブの失敗とは判断できません。ParaViewのビルドと実行環境によっては、別の描画バックエンドに切り替えて処理が継続します。
+
+確認する項目：
+
+1. ジョブの終了状態・終了コードを、利用環境のジョブ情報で確認する。
+2. 標準出力に対象ファイル分の `Saved:` が出ているか確認する。
+3. PNGの更新時刻が今回の実行と一致し、ファイルが空でないことを確認する。
+4. 画像を開き、期待した描画になっているか確認する。
+
+今回確認したジョブ `601295` では、標準出力に10件の `Saved:` があり、PNGの更新時刻も今回の実行に一致していました。警告のみで画像が正常なら、警告を消すためだけに描画方法を変更する必要はありません。
+
+### 10.3 EGLを明示してXサーバーを使わずに描画する
+
+現在の [go.sh](./go.sh) の実行部分は次の形式です。
+
+```sh
+/home/yamanaka/.pyenv/versions/anaconda3-2024.10-1/bin/conda run \
+  --no-capture-output \
+  -p /home/yamanaka/.pyenv/versions/anaconda3-2024.10-1/envs/paraview \
+  pvpython \
+  --force-offscreen-rendering \
+  --opengl-window-backend EGL \
+  main.py --config config.json
+```
+
+- `--force-offscreen-rendering` はオフスクリーン描画を要求します。
+- `--opengl-window-backend EGL` はXサーバーを使わないEGLバックエンドを指定します。
+- この2つは **ParaViewの `pvpython` 側のオプション**です。`main.py` より前に指定し、JSONには書きません。
+- これらのオプションに対応したParaViewが必要です。対応状況は `pvpython --help` で確認してください。
+- 上記の絶対パスはこの環境の例です。別の環境では実際の導入先に変更し、計算ノードからも同じパスにアクセスできることを確認してください。
+- EGLの利用には対応するParaViewビルドと、計算ノード上の適切なOpenGL/EGLライブラリ・ドライバーが必要です。バックエンドを指定するだけで動作が保証されるわけではありません。
+
+EGLの初期化に失敗する場合、OSMesaに対応したビルドとライブラリがあれば、`--opengl-window-backend OSMesa` に変更する方法もあります。Xディスプレイが必要な構成では、前節の `xvfb-run` などを検討してください。バックエンドの変更後は、同じ計算ノード環境で画像の生成と内容を確認してください。
+
+### 10.4 ジョブの投入
+
+このREADMEのディレクトリで、設定を編集してから投入します。
+
+```bash
+mkdir -p stdout stderr
+qsub go.sh
+```
+
+標準出力・標準エラーの保存先は、スケジューラーが使用する前に作成しておきます。ジョブスクリプト内での作成だけに依存しないでください。
+
+`go.sh` の作業ディレクトリ移動は、次のように引用符を付け、失敗した場合は中断する書き方を推奨します。
+
+```sh
+cd "$PBS_O_WORKDIR" || exit 1
+```
+
+`PBS_O_WORKDIR` はqsubを実行したディレクトリです。`main.py`、`config.json`、設定内の相対パスが解決できる場所から投入してください。
+
+## 11. よくあるエラー
 
 | 症状・メッセージ | 確認・対処 |
 |---|---|
 | `pvpython: command not found` | `conda activate paraview` と `command -v pvpython` を確認。システムの自動インストールに頼らず、環境内の実行ファイルを使用 |
 | `ParaView Python modules are unavailable` | 通常の `python` ではなく、対応するParaViewの `pvpython` で実行 |
 | パッケージ導入時の認証失敗 | システムインストールの権限問題。ユーザー領域のconda環境を使用するか管理者に相談 |
-| XディスプレイやOpenGLのエラー | ヘッドレス実行の節を確認。使用ビルド・ドライバーの要件を確認 |
+| XディスプレイやOpenGLのエラー | 第9節・第10節を確認。X接続警告だけで失敗と判断せず、ジョブの終了状態・PNGも確認 |
+| qsubで `pyenv: pvpython: command not found` | 第10節のようにcondaの絶対パスと環境パスを明示 |
 | `No VTK files matched` | パス、カレントディレクトリ、パターンを確認。JSONからの相対パスも実行場所基準 |
 | `duplicate PNG` | 共通保存先に同じstemの入力を集めていないか確認。入力を分けるか保存先を分離 |
 | `field ... not found` | 配列名と `POINTS` / `CELLS` の区分を確認。エラーに表示される利用可能な配列名を参照 |
@@ -503,7 +580,7 @@ xvfb-run -a pvpython main.py --config config.json
 
 処理はエラー時点で中断します。途中まで保存された画像の削除やロールバックは行いません。
 
-## 11. 検証状況
+## 12. 検証状況
 
 旧構成では、引数処理、JSON設定、ファイル選択、描画APIの呼び出し・適用順序などのモックによるユニットテストを実施しました。ただし、親ディレクトリに残るテストは旧モジュール名を参照しているため、現在のファイル配置ではそのまま実行できません。移動後のテスト実行にはimportとモック対象の更新が必要です。
 
